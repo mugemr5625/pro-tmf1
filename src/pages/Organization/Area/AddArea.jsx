@@ -272,7 +272,7 @@ const AddArea = () => {
       showSearch
       size="large"
       loading={lineLoader}
-      disabled={!formData?.branch_id}
+      disabled={!!params.id || !formData?.branch_id}
     >
       {lineList?.map((line) => (
         <Option key={line?.id} value={line?.id}>

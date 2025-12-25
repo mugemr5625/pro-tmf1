@@ -8,6 +8,7 @@ import wordIcon from "../../assets/icons/word.png";
 import defaultIcon from "../../assets/icons/default.png";
 import LocationMapModal from "./LocationMapModal"; 
 import location2 from "../../assets/icons/location (1).png"
+import linkIcon from "../../assets/icons/link.png"
 
 // ========== SECURITY CONFIGURATION ==========
 const ALLOWED_DOMAINS = [
@@ -164,25 +165,25 @@ const SecureImagePreview = ({ url }) => {
   );
 };
 
-const SecurePDFPreview = ({ url }) => {
+const SecurePDFPreview = ({ url,description }) => {
   const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
     <div style={{ margin: 0, padding: 0 }}>
       {/* Compact button section */}
-      <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+      <div style={{ marginBottom: 8, marginTop: '5px', display: 'flex', gap: 8 }}>
         <Button 
           type="primary" 
           size="small"
           onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-        >
-          Open PDF in New Tab
-        </Button>
+          icon={<img src={linkIcon} alt="open" style={{ width: 14, height: 14 }} />}
+        />
+        
       </div>
       
       {/* Compact alert */}
       <Alert
-        message="Using Google Docs Viewer for reliable preview."
+        message={description || "Document Preview"}
         type="info"
         showIcon
         style={{ marginBottom: 8, padding: '4px 12px' }}
@@ -215,6 +216,9 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
   const [verificationError, setVerificationError] = useState(null);
   const [verificationWarning, setVerificationWarning] = useState(null);
   const [showLocationModal, setShowLocationModal] = useState(false);
+ 
+const [selectedFileDescription, setSelectedFileDescription] = useState(""); // New state
+
 
   if (!customer) return null;
 
@@ -253,7 +257,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
   // Helper to get document label based on type
   const getDocumentLabel = (doc) => {
     const typeLabels = {
-      'adhaar': 'Aadhaar Card:',
+      'aadhaar': 'Aadhaar Card:',
       'pan': 'PAN Card:',
       'voter_id': 'Voter ID:',
       'driving_license': 'Driving License:',
@@ -266,7 +270,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
     return typeLabels[doc.document_type?.toLowerCase()] || `Document:`;
   };
 
-  const handleOpenFile = async (url) => {
+  const handleOpenFile = async (url,description) => {
     console.log('Opening file:', url);
     setIsVerifying(true);
     setVerificationError(null);
@@ -295,6 +299,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
       }
 
       setSelectedFile(url);
+      setSelectedFileDescription(description);
       setFileType(contentCheck.type || extensionType);
       setIsModalOpen(true);
       
@@ -323,7 +328,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
 
     switch (fileType) {
       case "pdf":
-        return <SecurePDFPreview url={selectedFile} />;
+        return <SecurePDFPreview url={selectedFile} description={selectedFileDescription} />;
       
       case "image":
         return <SecureImagePreview url={selectedFile} />;
@@ -521,7 +526,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <img src={iconUrl} alt="File Icon" width={20} height={20} />
                   <span
-                    onClick={() => handleOpenFile(fileUrl)}
+                    onClick={() => handleOpenFile(fileUrl,description)}
                     style={{
                       color: '#1890ff',
                       cursor: 'pointer',
@@ -568,7 +573,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
 
       {/* Document Preview Modal */}
       <Modal
-        title="Document Preview"
+        // title="Document Preview"
         open={isModalOpen}
         onCancel={handleCancel}
         footer={[
@@ -579,7 +584,7 @@ const CustomerCollapseContent = ({ customer, areaIdToNameMap, documents = [] }) 
         width={900}
         centered
         destroyOnClose
-        bodyStyle={{ padding: '8px', margin: 0 }}
+       
         style={{ top: "10px" }}
       >
         {isVerifying ? (

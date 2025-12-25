@@ -441,7 +441,6 @@ textarea,
 }
 .ant-modal .ant-modal-content{
   padding: 10px;
-  top: -50px;
 }
 /* Prevent text selection on double-click */
 body {

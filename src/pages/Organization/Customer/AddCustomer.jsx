@@ -352,6 +352,11 @@ const [isEditMode, setIsEditMode] = useState(false);
             description: 'Please allow location access and wait...',
             duration: 4,
         });
+        const options = {
+        enableHighAccuracy: true,
+        timeout: 30000,    // Increased for Firefox hardware lag
+        maximumAge: 0,     // Force fresh data
+    };
 
         // OPTIMIZED: Get high-accuracy position
          const watchId = navigator.geolocation.watchPosition(
@@ -394,26 +399,41 @@ const [isEditMode, setIsEditMode] = useState(false);
 
             }
         },
-        (error) => {
-            let errorMessage = "Unable to get location";
-            if (error.code === 1) errorMessage = "Location permission denied";
-            if (error.code === 2) errorMessage = "Location unavailable";
-            if (error.code === 3) errorMessage = "Location request timeout";
-
-            notification.error({
-                message: "GPS Error",
-                description: errorMessage,
-            });
+     (error) => {
+            // FALLBACK: If high accuracy fails/timeouts, try standard accuracy once
+            if (error.code === 3 || error.code === 2) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        setSelectedLocation({
+                            lat: latitude.toFixed(6),
+                            lng: longitude.toFixed(6),
+                            address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+                        });
+                        setMapCenter({ lat: latitude, lng: longitude });
+                        notification.warning({
+                            message: "Standard Accuracy",
+                            description: "Could not get high-precision GPS. Using network location.",
+                        });
+                    },
+                    null,
+                    { enableHighAccuracy: false, timeout: 10000 }
+                );
+            } else {
+                let errorMessage = "Unable to get location";
+                if (error.code === 1) errorMessage = "Location permission denied";
+                notification.error({ message: "GPS Error", description: errorMessage });
+            }
+            navigator.geolocation.clearWatch(watchId);
         },
-        {
-            enableHighAccuracy: true,
-            timeout: 20000,
-            maximumAge: 0,
-        }
+        options
     );
+
+    // Safety cleanup: stop watching after 35 seconds regardless
+    setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+    }, 35000);
 };
-
-
 
     const handleMapClick = (e) => {
         const lat = e.latLng.lat();
