@@ -337,103 +337,57 @@ const [isEditMode, setIsEditMode] = useState(false);
         setMapModalVisible(true);
     };
 
-  const handleGetCurrentLocation = () => {
-    if (!navigator.geolocation) {
-        notification.error({
-            message: 'Geolocation Not Supported',
-            description: 'Your browser does not support geolocation.',
-        });
-        return;
-    }
-
-    notification.info({
-        message: 'Getting GPS Location',
-        description: 'Acquiring satellite fix... Please wait outdoors for best results.',
-        duration: 5,
-    });
-
-    let watchId = null;
-    let bestAccuracy = Infinity;
-    let timeoutId = null;
-    let improvementTimeoutId = null;
-    let lastImprovementTime = Date.now();
-
-    // Mobile GPS-optimized options
-    const options = {
-        enableHighAccuracy: true,
-        timeout: 120000,       // 2 minutes for mobile GPS
-        maximumAge: 0,         // Always get fresh GPS data
-    };
-
-    let bestPosition = null;
-    let positionCount = 0;
-
-    const finishWithBestPosition = (reason = '') => {
-        if (watchId !== null) {
-            navigator.geolocation.clearWatch(watchId);
-            watchId = null;
-        }
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-        if (improvementTimeoutId !== null) {
-            clearTimeout(improvementTimeoutId);
-            improvementTimeoutId = null;
-        }
-
-        if (bestPosition) {
-            const { latitude, longitude, accuracy } = bestPosition.coords;
-
-            setSelectedLocation({
-                lat: latitude.toFixed(6),
-                lng: longitude.toFixed(6),
-                address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+    const handleGetCurrentLocation = () => {
+        if (!navigator.geolocation) {
+            notification.error({
+                message: 'Geolocation Not Supported',
+                description: 'Your browser does not support geolocation.',
+                // duration: 5,
             });
-
-            setMapCenter({ lat: latitude, lng: longitude });
-
-            console.log(`Finished: ${reason}, Accuracy: ${accuracy.toFixed(1)}m`);
-
-            if (accuracy <= 2) {
-                notification.success({
-                    message: "Excellent GPS Lock ✅",
-                    description: `Accuracy: ${accuracy.toFixed(1)} meters`,
-                    duration: 3,
-                });
-            } else if (accuracy <= 10) {
-                notification.success({
-                    message: "Good GPS Lock ✅",
-                    description: `Accuracy: ${accuracy.toFixed(1)} meters`,
-                    duration: 3,
-                });
-            } else {
-                notification.warning({
-                    message: "GPS Lock Acquired",
-                    description: `Accuracy: ${accuracy.toFixed(1)} meters. Move outdoors for better signal.`,
-                    duration: 4,
-                });
-            }
+            return;
         }
+
+        notification.info({
+            message: 'Getting Location',
+            description: 'Please allow location access and wait...',
+            duration: 4,
+        });
+        const options = {
+        enableHighAccuracy: true,
+        timeout: 30000,    // Increased for Firefox hardware lag
+        maximumAge: 0,     // Force fresh data
     };
 
-    watchId = navigator.geolocation.watchPosition(
+        // OPTIMIZED: Get high-accuracy position
+         const watchId = navigator.geolocation.watchPosition(
         (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            positionCount++;
+               const { latitude, longitude, accuracy } = position.coords;
 
-            console.log(`Update #${positionCount}: Accuracy=${accuracy.toFixed(1)}m, Lat=${latitude.toFixed(6)}, Lng=${longitude.toFixed(6)}`);
+            console.log("Live Accuracy:", accuracy);
 
-            // Update if this is better accuracy
-            if (accuracy < bestAccuracy) {
-                const improvement = bestAccuracy - accuracy;
-                console.log(`✅ Improved by ${improvement.toFixed(1)}m`);
-                
-                bestAccuracy = accuracy;
-                bestPosition = position;
-                lastImprovementTime = Date.now();
+            // ✅ Only accept when accuracy is GOOD (≤ 5 meters)
+            if (accuracy <= 2) {
+                const lat = latitude.toFixed(6);
+                const lng = longitude.toFixed(6);
 
-                // Update UI immediately with best position
+                setSelectedLocation({
+                    lat,
+                    lng,
+                    address: `${lat}, ${lng}`,
+                });
+
+                setMapCenter({ lat: latitude, lng: longitude });
+
+                notification.success({
+                    message: "High Accuracy Location Locked ✅",
+                    description: `Accuracy: ${accuracy.toFixed(1)} meters`,
+                    duration: 3,
+                });
+
+                // ✅ Stop tracking once good accuracy is achieved
+                navigator.geolocation.clearWatch(watchId);
+            } else {
+                // Keep updating marker live while accuracy improves
                 setSelectedLocation({
                     lat: latitude.toFixed(6),
                     lng: longitude.toFixed(6),
@@ -441,96 +395,44 @@ const [isEditMode, setIsEditMode] = useState(false);
                 });
 
                 setMapCenter({ lat: latitude, lng: longitude });
-                
-                if (typeof setCurrentAccuracy === 'function') {
-                    setCurrentAccuracy(accuracy);
-                }
+                setCurrentAccuracy(accuracy);
 
-                // Reset the "no improvement" timeout
-                if (improvementTimeoutId !== null) {
-                    clearTimeout(improvementTimeoutId);
-                }
-                
-                // If no improvement for 10 seconds, lock position
-                improvementTimeoutId = setTimeout(() => {
-                    if (bestPosition) {
-                        finishWithBestPosition('No improvement for 10 seconds');
-                    }
-                }, 10000);
-            }
-
-            // Lock immediately if excellent accuracy achieved
-            if (accuracy <= 5) {
-                finishWithBestPosition('Excellent accuracy achieved');
-            }
-            // Lock if very good accuracy after 3+ readings
-            else if (accuracy <= 10 && positionCount >= 3) {
-                finishWithBestPosition('Very good accuracy achieved');
-            }
-            // Lock if good accuracy after 5+ readings
-            else if (accuracy <= 20 && positionCount >= 5) {
-                finishWithBestPosition('Good accuracy achieved');
             }
         },
-        (error) => {
-            console.error("Geolocation error:", error.code, error.message);
-            
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
+     (error) => { 
+            // FALLBACK: If high accuracy fails/timeouts, try standard accuracy once
+            if (error.code === 3 || error.code === 2) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        setSelectedLocation({
+                            lat: latitude.toFixed(6),
+                            lng: longitude.toFixed(6),
+                            address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+                        });
+                        setMapCenter({ lat: latitude, lng: longitude });
+                        notification.warning({
+                            message: "Standard Accuracy",
+                            description: "Could not get high-precision GPS. Using network location.",
+                        });
+                    },
+                    null,
+                    { enableHighAccuracy: false, timeout: 10000 }
+                );
+            } else {
+                let errorMessage = "Unable to get location";
+                if (error.code === 1) errorMessage = "Location permission denied";
+                notification.error({ message: "GPS Error", description: errorMessage });
             }
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
-            if (improvementTimeoutId !== null) {
-                clearTimeout(improvementTimeoutId);
-            }
-
-            // If we have a position already, use it
-            if (bestPosition) {
-                finishWithBestPosition('Error occurred but position available');
-                return;
-            }
-
-            // Error messages
-            let errorMessage = "Unable to get GPS location";
-            let description = "";
-            
-            if (error.code === 1) {
-                errorMessage = "Location Permission Denied";
-                description = "Please enable location permissions in Firefox settings.";
-            } else if (error.code === 2) {
-                errorMessage = "GPS Position Unavailable";
-                description = "Cannot get GPS signal. Ensure GPS is enabled and you're outdoors.";
-            } else if (error.code === 3) {
-                errorMessage = "GPS Timeout";
-                description = "GPS took too long. Try again outdoors with clear sky view.";
-            }
-
-            notification.error({ 
-                message: errorMessage, 
-                description: description,
-                duration: 6,
-            });
+            navigator.geolocation.clearWatch(watchId);
         },
         options
     );
 
-    // Maximum timeout: 45 seconds, then use best available
-    timeoutId = setTimeout(() => {
-        if (bestPosition) {
-            finishWithBestPosition('Maximum time reached');
-        } else {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-            }
-            notification.error({
-                message: "GPS Timeout",
-                description: "Could not acquire GPS signal. Please ensure GPS is enabled and try outdoors.",
-                duration: 6,
-            });
-        }
-    }, 45000);
+    // Safety cleanup: stop watching after 35 seconds regardless
+    setTimeout(() => {
+        navigator.geolocation.clearWatch(watchId);
+    }, 35000);
 };
 
     const handleMapClick = (e) => {
