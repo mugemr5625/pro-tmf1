@@ -395,13 +395,13 @@ const [isEditMode, setIsEditMode] = useState(false);
 
             console.log(`Finished: ${reason}, Accuracy: ${accuracy.toFixed(1)}m`);
 
-            if (accuracy <= 10) {
+            if (accuracy <= 2) {
                 notification.success({
                     message: "Excellent GPS Lock ✅",
                     description: `Accuracy: ${accuracy.toFixed(1)} meters`,
                     duration: 3,
                 });
-            } else if (accuracy <= 30) {
+            } else if (accuracy <= 10) {
                 notification.success({
                     message: "Good GPS Lock ✅",
                     description: `Accuracy: ${accuracy.toFixed(1)} meters`,
