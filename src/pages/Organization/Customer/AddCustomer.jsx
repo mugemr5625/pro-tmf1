@@ -337,74 +337,82 @@ const [isEditMode, setIsEditMode] = useState(false);
         setMapModalVisible(true);
     };
 
-    const handleGetCurrentLocation = () => {
-        if (!navigator.geolocation) {
-            notification.error({
-                message: 'Geolocation Not Supported',
-                description: 'Your browser does not support geolocation.',
-                // duration: 5,
-            });
-            return;
-        }
-
-        notification.info({
-            message: 'Getting Location',
-            description: 'Please allow location access and wait...',
-            duration: 4,
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+        notification.error({
+            message: 'Geolocation Not Supported',
+            description: 'Your browser does not support geolocation.',
         });
-        const options = {
+        return;
+    }
+
+    notification.info({
+        message: 'Getting Location',
+        description: 'Please allow location access and wait...',
+        duration: 4,
+    });
+
+    const options = {
         enableHighAccuracy: true,
-        timeout: 30000,    // Increased for Firefox hardware lag
-        maximumAge: 0,     // Force fresh data
+        timeout: 30000,
+        maximumAge: 0,
     };
 
-        // OPTIMIZED: Get high-accuracy position
-         const watchId = navigator.geolocation.watchPosition(
+    let hasShownNotification = false; // Track if we've shown accuracy notification
+
+    const watchId = navigator.geolocation.watchPosition(
         (position) => {
-               const { latitude, longitude, accuracy } = position.coords;
+            const { latitude, longitude, accuracy } = position.coords;
 
             console.log("Live Accuracy:", accuracy);
 
-            // ✅ Only accept when accuracy is GOOD (≤ 5 meters)
+            const lat = latitude.toFixed(6);
+            const lng = longitude.toFixed(6);
+
+            // Always update location
+            setSelectedLocation({
+                lat,
+                lng,
+                address: `${lat}, ${lng}`,
+            });
+
+            setMapCenter({ lat: latitude, lng: longitude });
+            setCurrentAccuracy(accuracy);
+
+            // ✅ Best case: High accuracy achieved (≤2m)
             if (accuracy <= 2) {
-                const lat = latitude.toFixed(6);
-                const lng = longitude.toFixed(6);
-
-                setSelectedLocation({
-                    lat,
-                    lng,
-                    address: `${lat}, ${lng}`,
-                });
-
-                setMapCenter({ lat: latitude, lng: longitude });
-
                 notification.success({
                     message: "High Accuracy Location Locked ✅",
                     description: `Accuracy: ${accuracy.toFixed(1)} meters`,
                     duration: 3,
                 });
-
-                // ✅ Stop tracking once good accuracy is achieved
                 navigator.geolocation.clearWatch(watchId);
-            } else {
-                // Keep updating marker live while accuracy improves
-                setSelectedLocation({
-                    lat: latitude.toFixed(6),
-                    lng: longitude.toFixed(6),
-                    address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+            } 
+            // ✅ Good accuracy: Between 2-10m
+            else if (accuracy > 2 && accuracy <= 10) {
+                notification.success({
+                    message: "Good Accuracy Location Detected ✅",
+                    description: `Accuracy: ${accuracy.toFixed(1)} meters`,
+                    duration: 3,
                 });
-
-                setMapCenter({ lat: latitude, lng: longitude });
-                setCurrentAccuracy(accuracy);
-
+                navigator.geolocation.clearWatch(watchId);
+            }
+            // ✅ Moderate accuracy: Show notification once (only for first detection)
+            else if (!hasShownNotification && accuracy <= 20) {
+                notification.warning({
+                    message: "Location Detected",
+                    description: `Accuracy: ${accuracy.toFixed(1)} meters - Waiting for better signal...`,
+                    duration: 3,
+                });
+                hasShownNotification = true;
             }
         },
-     (error) => { 
+        (error) => {
             // FALLBACK: If high accuracy fails/timeouts, try standard accuracy once
             if (error.code === 3 || error.code === 2) {
                 navigator.geolocation.getCurrentPosition(
                     (pos) => {
-                        const { latitude, longitude } = pos.coords;
+                        const { latitude, longitude, accuracy } = pos.coords;
                         setSelectedLocation({
                             lat: latitude.toFixed(6),
                             lng: longitude.toFixed(6),
@@ -413,7 +421,7 @@ const [isEditMode, setIsEditMode] = useState(false);
                         setMapCenter({ lat: latitude, lng: longitude });
                         notification.warning({
                             message: "Standard Accuracy",
-                            description: "Could not get high-precision GPS. Using network location.",
+                            description: `Accuracy: ${accuracy.toFixed(1)} meters - Using network location.`,
                         });
                     },
                     null,
@@ -429,9 +437,18 @@ const [isEditMode, setIsEditMode] = useState(false);
         options
     );
 
-    // Safety cleanup: stop watching after 35 seconds regardless
+    // Safety cleanup: stop watching after 35 seconds
     setTimeout(() => {
         navigator.geolocation.clearWatch(watchId);
+        
+        // Show final notification if we never got high accuracy
+        if (!hasShownNotification) {
+            notification.info({
+                message: "Location Set",
+                description: "Using best available accuracy.",
+                duration: 2,
+            });
+        }
     }, 35000);
 };
 
